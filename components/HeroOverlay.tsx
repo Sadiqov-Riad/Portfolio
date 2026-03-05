@@ -45,8 +45,12 @@ function useClock() {
   return time;
 }
 
-export default function HeroOverlay() {
-  const name = useTyping("Riad Sadiqov", 75, true);
+type HeroOverlayProps = {
+  startAfterLoader?: boolean;
+};
+
+export default function HeroOverlay({ startAfterLoader = false }: HeroOverlayProps) {
+  const name = useTyping("Riad Sadiqov", 75, startAfterLoader);
   const role = useTyping("Software Engineer", 60, name.done);
   const liveTime = useClock();
 

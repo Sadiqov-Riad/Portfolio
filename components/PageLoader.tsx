@@ -10,7 +10,11 @@ const BOOT_LINES = [
   "> Hello, World!",
 ];
 
-export default function PageLoader() {
+type PageLoaderProps = {
+  onComplete?: () => void;
+};
+
+export default function PageLoader({ onComplete }: PageLoaderProps) {
   const [lines, setLines] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
   const [fadeOut, setFadeOut] = useState(false);
@@ -39,7 +43,10 @@ export default function PageLoader() {
 
     // Fade out
     const fadeTimer = setTimeout(() => setFadeOut(true), 2000);
-    const removeTimer = setTimeout(() => setVisible(false), 2750);
+    const removeTimer = setTimeout(() => {
+      setVisible(false);
+      onComplete?.();
+    }, 2750);
 
     return () => {
       clearInterval(lineInterval);
