@@ -3,54 +3,103 @@
 import { Suspense, useRef, useState, useCallback } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Canvas } from "@react-three/fiber";
-import { Environment, ContactShadows, SpotLight } from "@react-three/drei";
+import { Environment, ContactShadows, SpotLight, Html } from "@react-three/drei";
 import * as THREE from "three";
 import CoffeeCupModel from "./CoffeeCupModel";
 import ComputerModel from "./ComputerModel";
 import DeskModel from "./DeskModel";
-import LinuxOS from "./LinuxOS";
+import RetroWindows from "./RetroWindows";
 
 const LIGHT_DURATION = 1.8;
-const ZOOM_DURATION = 0.7;
-const FADE_DURATION = 0.5;
+const ZOOM_DURATION = 0.6;
 
-const CAM_START: [number, number, number] = [0, 0.3, 1.25];
-const CAM_END: [number, number, number] = [0, 0.43, 0.865];
-const LOOK_AT: [number, number, number] = [0, 0.3, 0];
+const CAM_STAGES: [number, number, number][] = [
+  [0, 0.3, 1.25],    // Far view
+  [0, 0.43, 0.865],  // Mid view
+  [0, 0.45, 0.55],   // Screen view
+];
+const LOOK_AT_START: [number, number, number] = [0, 0.3, 0];
+const LOOK_AT_END: [number, number, number] = [0, 0.38, 0];
 
-function CameraZoom({ zooming, idle, onComplete }: { zooming: boolean; idle: boolean; onComplete: () => void }) {
+function CameraZoom({ zooming, idle, onComplete, onPreComplete }: { zooming: boolean; idle: boolean; onComplete: () => void; onPreComplete: () => void }) {
   const { camera } = useThree();
   const tRef = useRef(0);
   const completedRef = useRef(false);
+  const preCompletedRef = useRef(false);
+  const startPosRef = useRef<THREE.Vector3 | null>(null);
+  const lookAtRef = useRef<THREE.Vector3>(new THREE.Vector3(...LOOK_AT_START));
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (idle) {
-      camera.position.set(...CAM_START);
-      camera.lookAt(...LOOK_AT);
+      const { pointer } = state;
+      // Parallax
+      const targetX = CAM_STAGES[0][0] + pointer.x * 0.08;
+      const targetY = CAM_STAGES[0][1] + pointer.y * 0.08;
+      const targetZ = CAM_STAGES[0][2];
+
+      camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 3 * delta);
+      
+      // Smooth lookAt back to start
+      lookAtRef.current.lerp(new THREE.Vector3(...LOOK_AT_START), 3 * delta);
+      camera.lookAt(lookAtRef.current);
+      
       camera.updateProjectionMatrix();
+
       completedRef.current = false;
+      preCompletedRef.current = false;
       tRef.current = 0;
+      startPosRef.current = null;
       return;
     }
-    if (!zooming) {
+    if (!zooming && tRef.current === 0) {
       completedRef.current = false;
+      preCompletedRef.current = false;
       tRef.current = 0;
+      startPosRef.current = null;
       return;
     }
     if (completedRef.current) return;
+    
+    if (!startPosRef.current) {
+      startPosRef.current = camera.position.clone();
+    }
 
     tRef.current = Math.min(tRef.current + delta / ZOOM_DURATION, 1);
+    
     const ease = 1 - (1 - tRef.current) ** 2;
 
-    camera.position.lerpVectors(
-      new THREE.Vector3(...CAM_START),
-      new THREE.Vector3(...CAM_END),
+    const pos = new THREE.Vector3();
+    const v0 = startPosRef.current;
+    const v1 = new THREE.Vector3(...CAM_STAGES[1]);
+    const v2 = new THREE.Vector3(...CAM_STAGES[2]);
+
+    if (ease < 0.5) {
+      const localEase = ease * 2;
+      pos.lerpVectors(v0, v1, localEase);
+    } else {
+      const localEase = (ease - 0.5) * 2;
+      pos.lerpVectors(v1, v2, localEase);
+    }
+
+    camera.position.copy(pos);
+  
+    const currentLookAt = new THREE.Vector3();
+    currentLookAt.lerpVectors(
+      new THREE.Vector3(...LOOK_AT_START),
+      new THREE.Vector3(...LOOK_AT_END),
       ease
     );
-    camera.lookAt(...LOOK_AT);
+    lookAtRef.current.copy(currentLookAt);
+    camera.lookAt(lookAtRef.current);
+    
     camera.updateProjectionMatrix();
 
-    if (tRef.current >= 1) {
+    if (tRef.current >= 0.95 && !preCompletedRef.current) {
+      preCompletedRef.current = true;
+      onPreComplete();
+    }
+
+    if (tRef.current >= 1 && !completedRef.current) {
       completedRef.current = true;
       onComplete();
     }
@@ -64,11 +113,19 @@ function SceneContents({
   zooming,
   idle,
   onZoomComplete,
+  onPreComplete,
+  setPhase,
+  phase,
+  showLinux,
 }: {
   loaderDone: boolean;
   zooming: boolean;
   idle: boolean;
   onZoomComplete: () => void;
+  onPreComplete: () => void;
+  setPhase: (phase: "idle" | "zooming" | "linux") => void;
+  phase: "idle" | "zooming" | "linux";
+  showLinux: boolean;
 }) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const dirRef = useRef<THREE.DirectionalLight>(null);
@@ -96,7 +153,7 @@ function SceneContents({
 
   return (
     <>
-      <CameraZoom zooming={zooming} idle={idle} onComplete={onZoomComplete} />
+      <CameraZoom zooming={zooming} idle={idle} onComplete={onZoomComplete} onPreComplete={onPreComplete} />
       <ambientLight ref={ambientRef} intensity={0} color="#c8d4e8" />
       <directionalLight ref={dirRef} position={[2, 4, 3]} intensity={0} color="#c8d4e8" />
       <SpotLight
@@ -119,6 +176,14 @@ function SceneContents({
       <DeskModel />
       <ComputerModel />
       <CoffeeCupModel />
+      
+      {phase === "idle" && !showLinux && loaderDone && (
+        <Html position={[0, 0.38, 0.08]} center zIndexRange={[100, 0]}>
+          <button className="run-btn-2d" onClick={() => setPhase("zooming")}>
+            <span className="run-btn-2d-icon">⏻</span> CLICK TO RUN
+          </button>
+        </Html>
+      )}
     </>
   );
 }
@@ -128,26 +193,27 @@ type ComputerSceneProps = {
 };
 
 export default function ComputerScene({ loaderDone = false }: ComputerSceneProps) {
-  const [phase, setPhase] = useState<"idle" | "zooming" | "fadeout" | "linux">("idle");
+  const [phase, setPhase] = useState<"idle" | "zooming" | "linux">("idle");
+  const [showLinux, setShowLinux] = useState(false);
 
-  const handleZoomComplete = useCallback(() => {
-    setPhase("fadeout");
+  const handlePreComplete = useCallback(() => {
+    setShowLinux(true);
   }, []);
 
-  const handleFadeComplete = useCallback(() => {
+  const handleZoomComplete = useCallback(() => {
     setPhase("linux");
   }, []);
 
   return (
     <div className="scene-container" style={{ background: "#0e0e0f" }}>
       <Canvas
-        camera={{ position: [...CAM_START], fov: 42 }}
+        camera={{ position: [...CAM_STAGES[0]], fov: 42 }}
         gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.9 }}
         dpr={[1, 2]}
         onCreated={({ scene, camera }) => {
           scene.background = new THREE.Color("#0e0e0f");
           scene.fog = new THREE.FogExp2("#0e0e0f", 0.35);
-          camera.lookAt(...LOOK_AT);
+          camera.lookAt(...LOOK_AT_START);
         }}
       >
         <Suspense fallback={null}>
@@ -156,33 +222,22 @@ export default function ComputerScene({ loaderDone = false }: ComputerSceneProps
             zooming={phase === "zooming"}
             idle={phase === "idle"}
             onZoomComplete={handleZoomComplete}
+            onPreComplete={handlePreComplete}
+            setPhase={setPhase}
+            phase={phase}
+            showLinux={showLinux}
           />
         </Suspense>
       </Canvas>
 
-      {/* Fade to black before Linux OS */}
-      {phase === "fadeout" && (
-        <div
-          className="fadeout-overlay"
-          style={{
-            animation: `fadeout-overlay-fade ${FADE_DURATION}s ease forwards`,
+      {showLinux && (
+        <RetroWindows
+          onClose={() => {
+            setShowLinux(false);
+            setPhase("idle");
           }}
-          onAnimationEnd={handleFadeComplete}
         />
       )}
-
-      {/* 2D overlay button — hidden during zoom */}
-      {phase === "idle" && (
-        <div className="run-btn-overlay">
-          <button className="run-btn-2d" onClick={() => setPhase("zooming")}>
-            <span className="run-btn-2d-icon">⏻</span>
-            Click to Run
-          </button>
-        </div>
-      )}
-
-      {/* Fullscreen Linux OS overlay — only after zoom completes */}
-      {phase === "linux" && <LinuxOS onClose={() => setPhase("idle")} />}
     </div>
   );
 }

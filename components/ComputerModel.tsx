@@ -35,7 +35,12 @@ const CENTER_OFFSET: [number, number, number] = [-1.8, 0, 1.53];
 const SCREEN_POS: [number, number, number] = [-0.063, 0.355, 0.085];
 const SCREEN_SCALE = 0.0021;
 
-export default function ComputerModel(props: React.JSX.IntrinsicElements["group"]) {
+type Props = React.JSX.IntrinsicElements["group"] & {
+  onRunClick?: () => void;
+  showRunButton?: boolean;
+};
+
+export default function ComputerModel({ onRunClick, showRunButton = false, ...props }: Props) {
   const { nodes, materials } = useGLTF(MODEL_PATH) as unknown as GLTFResult;
 
   return (
