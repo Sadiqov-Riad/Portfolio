@@ -3,7 +3,38 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Code, Map, Mail, TerminalSquare, Github, Linkedin, Power } from "lucide-react";
 
+type StackItem = { label: string; value: string };
+type Project = {
+  id: string;
+  name: string;
+  description: string;
+  stack: StackItem[];
+  github: string;
+  icon: string;
+};
+type Profile = {
+  name: string;
+  role: string;
+  bio: string;
+  email: string;
+  github: string;
+  linkedin: string;
+  skills: string[];
+};
+
 export default function RetroWindows({ onClose }: { onClose: () => void }) {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+
+  useEffect(() => {
+    fetch("/api/portfolio")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.profile) setProfile(data.profile);
+        if (data.projects) setProjects(data.projects);
+      })
+      .catch(console.error);
+  }, []);
   const [bootStage, setBootStage] = useState(0); // 0 = start text, 1 = logo, 2 = desktop
   const isBooting = bootStage < 2;
   const [time, setTime] = useState("");
@@ -36,8 +67,8 @@ export default function RetroWindows({ onClose }: { onClose: () => void }) {
       setOsFadeOut(true);
       setTimeout(() => {
         onClose();
-      }, 800);
-    }, 2200);
+      }, 500);
+    }, 1000);
   };
 
   useEffect(() => {
@@ -46,10 +77,10 @@ export default function RetroWindows({ onClose }: { onClose: () => void }) {
       const audio = new Audio("https://upload.wikimedia.org/wikipedia/commons/e/e3/The_Microsoft_Sound.ogg");
       audio.volume = 0.5;
       audio.play().catch(() => {});
-    }, 600);
+    }, 150);
 
     // Desktop
-    const bootTimer = setTimeout(() => setBootStage(2), 5500);
+    const bootTimer = setTimeout(() => setBootStage(2), 1800);
 
     const tick = () => {
       setTime(new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }));
@@ -66,6 +97,13 @@ export default function RetroWindows({ onClose }: { onClose: () => void }) {
   const toggleWindow = (name: string) => {
     if (!openWindows.includes(name)) {
       setOpenWindows([...openWindows, name]);
+    }
+    // Ensure position exists for dynamically loaded project windows
+    if (!positions[name]) {
+      setPositions((prev) => ({
+        ...prev,
+        [name]: { x: 160 + Math.random() * 80, y: 80 + Math.random() * 80 },
+      }));
     }
     setActiveWindow(name);
   };
@@ -201,20 +239,19 @@ export default function RetroWindows({ onClose }: { onClose: () => void }) {
             <span>File</span><span>Edit</span><span>Search</span><span>Help</span>
           </div>
           <div className="win95-window-content bg-white text-black p-3 font-mono text-sm overflow-y-auto">
-            <p className="font-bold"># Riad Sadiqov</p>
+            <p className="font-bold"># {profile?.name ?? "Riad Sadiqov"}</p>
             <p>=================</p>
-            <p className="mt-2">Software Engineer passionate about crafting deeply interactive experiences.</p>
+            <p className="mt-2">{profile?.bio ?? "Software Engineer focused on building web and mobile products."}</p>
             <br />
             <p>&gt; SPECIALTIES:</p>
             <ul className="list-disc pl-5 mt-1 space-y-1">
-              <li>React, Next.js, Node.js</li>
-              <li>TypeScript / JavaScript</li>
-              <li>Three.js & WebGL</li>
-              <li>Python & Scripting</li>
+              {(profile?.skills ?? ["React","Python","Django","ASP.NET","C++","C#","SQL","Docker","AWS","Git"]).map((s) => (
+                <li key={s}>{s}</li>
+              ))}
             </ul>
             <br />
             <p>&gt; STATUS: Open to new opportunities.</p>
-            <p>&gt; LOC: Base Earth.</p>
+            <p>&gt; FOCUS: Full-stack and mobile development.</p>
           </div>
         </div>
       )}
@@ -234,119 +271,49 @@ export default function RetroWindows({ onClose }: { onClose: () => void }) {
             </button>
           </div>
           <div className="win95-window-content bg-white text-black p-4 flex gap-6 flex-wrap content-start">
-              <div className="win95-file-icon" onDoubleClick={() => toggleWindow("HabitForge")}>
-                <img src="/assets/icon_explorer.png" width={36} height={36} />
-                <span>HabitForge</span>
-              </div>
-              <div className="win95-file-icon" onDoubleClick={() => toggleWindow("CoffeeShop")}>
-                <img src="/assets/icon_notepad.png" width={36} height={36} />
-                <span>CoffeeShop</span>
-              </div>
-              <div className="win95-file-icon" onDoubleClick={() => toggleWindow("E_Wallet")}>
-                <img src="/assets/icon_folder.png" width={36} height={36} />
-                <span>E-wallet</span>
-              </div>
+              {projects.map((p) => (
+                <div key={p.id} className="win95-file-icon" onDoubleClick={() => toggleWindow(p.id)}>
+                  <img src={`/assets/${p.icon}`} width={36} height={36} />
+                  <span>{p.name}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
       
-        {openWindows.includes("HabitForge") && (
-          <div
-            className={`win95-window ${activeWindow === "HabitForge" ? "active" : ""}`}
-            onMouseDown={() => setActiveWindow("HabitForge")}
-            style={{ top: positions["HabitForge"].y, left: positions["HabitForge"].x, width: "380px", height: "290px" }}
-          >
-            <div className="win95-titlebar" onMouseDown={(e) => startDrag(e, "HabitForge")}>
-              <span className="win95-title">
-                <Code size={14} className="inline mr-1 text-blue-200" /> HabitForge
-              </span>
-              <button className="win95-close-btn" onClick={() => closeWindow("HabitForge")}>
-                <X size={12} strokeWidth={3} />
-              </button>
+        {projects.map((p) =>
+          openWindows.includes(p.id) && positions[p.id] ? (
+            <div
+              key={p.id}
+              className={`win95-window ${activeWindow === p.id ? "active" : ""}`}
+              onMouseDown={() => setActiveWindow(p.id)}
+              style={{ top: positions[p.id].y, left: positions[p.id].x, width: "380px", height: "300px" }}
+            >
+              <div className="win95-titlebar" onMouseDown={(e) => startDrag(e, p.id)}>
+                <span className="win95-title">
+                  <Code size={14} className="inline mr-1 text-blue-200" /> {p.name}
+                </span>
+                <button className="win95-close-btn" onClick={() => closeWindow(p.id)}>
+                  <X size={12} strokeWidth={3} />
+                </button>
+              </div>
+              <div className="win95-window-content bg-white text-black p-4 text-sm overflow-y-auto">
+                <img src={`/assets/${p.icon}`} width={32} height={32} className="float-right ml-4 mb-4" />
+                <h2 className="text-xl font-bold mb-2">{p.name}</h2>
+                <p className="mb-3">{p.description}</p>
+                <h3 className="font-bold mt-2">TECH STACK:</h3>
+                <ul className="list-disc pl-5 mb-4">
+                  {p.stack.map((s) => (
+                    <li key={s.label}><strong>{s.label}:</strong> {s.value}</li>
+                  ))}
+                </ul>
+                <a href={p.github} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline flex items-center gap-1 mt-4 hover:text-blue-800">
+                  <Github size={16} /> View on GitHub
+                </a>
+              </div>
             </div>
-            <div className="win95-window-content bg-white text-black p-4 text-sm overflow-y-auto">
-              <img src="/assets/icon_explorer.png" width={32} height={32} className="float-right ml-4 mb-4" />
-              <h2 className="text-xl font-bold mb-2">HabitForge</h2>
-              <p className="mb-3">A full-stack habit tracking application designed to help users build and maintain positive routines.</p>
-              <h3 className="font-bold mt-2">TECH STACK:</h3>
-              <ul className="list-disc pl-5 mb-4">
-                <li><strong>Frontend:</strong> React</li>
-                <li><strong>Backend:</strong> ASP.NET Core</li>
-                <li><strong>Database:</strong> SQL Server</li>
-              </ul>
-              <a href="https://github.com/riadsadiqov/HabitForge" target="_blank" rel="noopener noreferrer" className="text-blue-700 underline flex items-center gap-1 mt-4 hover:text-blue-800">
-                <Github size={16} /> View on GitHub
-              </a>
-            </div>
-          </div>
-        )}
-
-        {openWindows.includes("CoffeeShop") && (
-          <div
-            className={`win95-window ${activeWindow === "CoffeeShop" ? "active" : ""}`}
-            onMouseDown={() => setActiveWindow("CoffeeShop")}
-            style={{ top: positions["CoffeeShop"].y, left: positions["CoffeeShop"].x, width: "360px", height: "290px" }}
-          >
-            <div className="win95-titlebar" onMouseDown={(e) => startDrag(e, "CoffeeShop")}>
-              <span className="win95-title">
-                <Map size={14} className="inline mr-1 text-green-200" /> CoffeeShop
-              </span>
-              <button className="win95-close-btn" onClick={() => closeWindow("CoffeeShop")}>
-                <X size={12} strokeWidth={3} />
-              </button>
-            </div>
-            <div className="win95-window-content bg-white text-black p-4 text-sm overflow-y-auto">
-              <img src="/assets/icon_notepad.png" width={32} height={32} className="float-right ml-4 mb-4" />
-              <h2 className="text-xl font-bold mb-2">CoffeeShop App</h2>
-              <p className="mb-3">A cross-platform mobile application for browsing coffee menus, placing orders, and managing loyalty rewards.</p>
-              <h3 className="font-bold mt-2">TECH STACK:</h3>
-              <ul className="list-disc pl-5 mb-4">
-                <li><strong>Framework:</strong> React Native</li>
-                <li><strong>Features:</strong> Animations, Cart state, UI/UX</li>
-                <li><strong>Platforms:</strong> iOS & Android</li>
-              </ul>
-              <a href="https://github.com/riadsadiqov/CoffeeShop" target="_blank" rel="noopener noreferrer" className="text-blue-700 underline flex items-center gap-1 mt-4 hover:text-blue-800">
-                <Github size={16} /> View on GitHub
-              </a>
-            </div>
-          </div>
-        )}
-
-        {openWindows.includes("E_Wallet") && (
-          <div
-            className={`win95-window ${activeWindow === "E_Wallet" ? "active" : ""}`}
-            onMouseDown={() => setActiveWindow("E_Wallet")}
-            style={{ top: positions["E_Wallet"].y, left: positions["E_Wallet"].x, width: "360px", height: "300px" }}
-          >
-            <div className="win95-titlebar" onMouseDown={(e) => startDrag(e, "E_Wallet")}>
-              <span className="win95-title">
-                <TerminalSquare size={14} className="inline mr-1 text-gray-200" /> E-wallet
-              </span>
-              <button className="win95-close-btn" onClick={() => closeWindow("E_Wallet")}>
-                <X size={12} strokeWidth={3} />
-              </button>
-            </div>
-            <div className="win95-window-content bg-black text-green-500 p-4 font-mono text-sm overflow-y-auto h-full">
-              <p>C:\Projects\E-Wallet&gt; run-android</p>
-              <br/>
-              <p className="font-bold text-white mb-2">=== E-Wallet React Native App ===</p>
-              <h3 className="text-white mt-2">TECH STACK:</h3>
-              <p className="text-gray-300">React Native</p>
-              <br/>
-              <p>Features loaded:</p>
-              <ul className="list-disc pl-5 mt-1">
-                <li>Secure Authentication</li>
-                <li>Balance Tracking</li>
-                <li>Transaction History</li>
-                <li>QR Code Scanning</li>
-              </ul>
-              <a href="https://github.com/riadsadiqov/E-Wallet" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline flex items-center gap-1 mt-4 pt-2 border-t border-gray-600 hover:text-blue-300">
-                <Github size={16} /> View on GitHub
-              </a>
-              <p className="animate-pulse mt-2">_</p>
-            </div>
-          </div>
+          ) : null
         )}
 
         {openWindows.includes("Contact") && (
@@ -368,7 +335,7 @@ export default function RetroWindows({ onClose }: { onClose: () => void }) {
           </div>
           <div className="win95-window-content bg-gray-200 p-2 text-black text-sm flex flex-col gap-2">
             <div className="flex bg-white border border-gray-400 p-1 px-2 items-center">
-              <span className="text-gray-500 w-12">To:</span> <span className="font-bold">hello@riadsadiqov.com</span>
+              <span className="text-gray-500 w-12">To:</span> <span className="font-bold">{profile?.email ?? "sadiqovriad2@gmail.com"}</span>
             </div>
             <div className="flex bg-white border border-gray-400 p-1 px-2 items-center">
               <span className="text-gray-500 w-12">Subj:</span> <span>Let's talk about a project!</span>
@@ -376,10 +343,10 @@ export default function RetroWindows({ onClose }: { onClose: () => void }) {
             <div className="bg-white border border-gray-400 p-2 flex-1 flex flex-col gap-4">
               <p>You can find me on the internet here:</p>
               <div className="flex gap-4">
-                <a href="#" className="flex items-center gap-1 text-blue-700 hover:underline">
+                <a href={profile?.github ?? "https://github.com/Sadiqov-Riad"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-700 hover:underline">
                   <Github size={16} /> GitHub
                 </a>
-                <a href="#" className="flex items-center gap-1 text-blue-700 hover:underline">
+                <a href={profile?.linkedin ?? "https://www.linkedin.com/in/riad-sadiqov-93a600329"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-700 hover:underline">
                   <Linkedin size={16} /> LinkedIn
                 </a>
               </div>

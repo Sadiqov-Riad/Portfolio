@@ -565,10 +565,9 @@
   letter-spacing: 0.06em;
 }
 
-/* ─── Run Button 2D overlay (near monitor) ─── */
+/* Run Button 2D */
 .run-btn-overlay {
   position: absolute;
-  /* visually near the right side of the monitor in the 3D scene */
   top: 40vh;
   left: 45vw;
   transform: translate(-50%, -50%);
@@ -674,7 +673,7 @@
   50%      { border-color: #66ff66; box-shadow: 0 0 20px rgba(51, 255, 51, 0.3), inset 0 0 15px rgba(51, 255, 51, 0.08); }
 }
 
-/* ─── Linux Boot Screen ─── */
+/*  Linux Boot Screen  */
 .screen-container.linux-boot {
   background: #0a0a0a;
   flex-direction: column;
@@ -760,7 +759,6 @@
   text-align: right;
 }
 
-/* ─── Linux Desktop (GNOME-style) ─── */
 .screen-container.linux-desktop {
   background: linear-gradient(135deg, #2c001e 0%, #3d1f56 40%, #1a0533 100%);
   position: relative;
@@ -942,9 +940,7 @@
   50%      { opacity: 0; }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Page Loader — pixel / code boot style
-   ═══════════════════════════════════════════════════════════════ */
+/* Page Loader — pixel / code boot style*/
 
 .pl-root {
   position: fixed;
@@ -1221,7 +1217,7 @@
   letter-spacing: 0.05em;
 }
 
-/* ── Desktop view ── */
+/*  Desktop view  */
 .lnx-desktop {
   flex: 1;
   display: flex;
